@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AhonNa - Tagbilaran Evacuation & Routing System</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+        .navbar-brand { font-size: 1.25rem; letter-spacing: -0.5px; }
+        .hero-section { background: linear-gradient(135deg, #0d6efd, #0dcaf0); color: white; padding: 4rem 2rem; border-radius: 0.75rem; margin-bottom: 2rem; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.05); }
+        #map { height: 420px; border-radius: 0.75rem; margin-bottom: 2rem; z-index: 1; border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.02); }
+        .card { border: none; border-radius: 0.75rem; transition: transform 0.2s ease, box-shadow 0.2s ease; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
+        .card:hover { transform: translateY(-4px); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1) !important; }
+        .search-box { border-radius: 0.5rem; padding: 0.75rem 1rem; border: 1px solid #ced4da; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-3">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#"><i class="bi bi-shield-fill-exclamation text-info me-2"></i>AhonNa Tagbilaran</a>
+            <div class="navbar-nav ms-auto align-items-center" id="navbar-nav">
+                <a class="nav-link active px-3" href="#home" onclick="switchTab('home')"><i class="bi bi-house-door me-1"></i> Home</a>
+                <a class="nav-link px-3" href="#centers" onclick="switchTab('centers')"><i class="bi bi-geo-alt me-1"></i> Evacuation Centers</a>
+                <a class="nav-link px-3" href="#donate" onclick="switchTab('donate')"><i class="bi bi-heart-fill text-danger me-1"></i> Donate</a>
+                <a class="nav-link px-3" href="#about" onclick="switchTab('about')"><i class="bi bi-info-circle me-1"></i> About</a>
+                <div id="auth-nav-items" class="d-flex ms-2">
+                    <!-- Populated dynamically via checkAuth() -->
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <!-- HOME TAB -->
+        <div id="tab-home" class="tab-content">
+            <div class="hero-section text-center">
+                <h1 class="display-5 fw-bold mb-3">Smart Evacuation & Routing for Tagbilaran City</h1>
+                <p class="lead mx-auto" style="max-width: 600px;">Ensuring fast, safe, and organized emergency responses for our community during critical situations.</p>
+                <div id="hero-auth-btns" class="mt-4">
+                    <!-- Dynamic auth buttons -->
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTERS TAB -->
+        <div id="tab-centers" class="tab-content" style="display:none;">
+            <div class="row mb-4 align-items-center g-3">
+                <div class="col-md-6">
+                    <h2 class="fw-bold mb-0">Evacuation Centers & Map</h2>
+                    <p class="text-muted small mb-0">Click any card to locate the center on the map instantly.</p>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0 search-box"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" id="searchInput" class="form-control search-box border-start-0 ps-0" placeholder="Search center name or location..." onkeyup="filterCenters()">
+                    </div>
+                </div>
+            </div>
+            
+            <div id="map"></div>
+            <div id="centers-list" class="row g-4"></div>
+        </div>
+
+        <!-- DONATE TAB (PAYMONGO CHECKOUT) -->
+        <div id="tab-donate" class="tab-content" style="display:none;">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card shadow-lg p-4 border-0">
+                        <div class="text-center mb-4">
+                            <div class="bg-danger bg-opacity-10 text-danger rounded-circle d-inline-flex p-3 mb-2">
+                                <i class="bi bi-heart-fill fs-2"></i>
+                            </div>
+                            <h3 class="fw-bold text-dark">Emergency Relief Fund</h3>
+                            <p class="text-muted small">Your contributions provide immediate food, water, and medical supplies to Tagbilaran evacuation centers during disasters.</p>
+                        </div>
+                        
+                        <!-- Modern Inline Alert Area -->
+                        <div id="donation-alert-container"></div>
+
+                        <form onsubmit="handleDonate(event)">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold text-secondary">Select or Enter Donation Amount (PHP)</label>
+                                <div class="input-group input-group-lg mb-3">
+                                    <span class="input-group-text bg-light fw-bold text-primary">₱</span>
+                                    <input type="number" id="donation-amount" class="form-control" value="500" min="100" step="50" required>
+                                </div>
+                                <div class="d-flex gap-2 mb-3">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="document.getElementById('donation-amount').value=100">₱100</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="document.getElementById('donation-amount').value=500">₱500</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="document.getElementById('donation-amount').value=1000">₱1,000</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="document.getElementById('donation-amount').value=5000">₱5,000</button>
+                                </div>
+                            </div>
+                            <div class="card bg-light border-0 p-3 mb-4 small text-muted">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bi bi-shield-check text-success fs-5 me-2"></i>
+                                    <span class="fw-semibold text-dark">Secured by PayMongo Test Gateway</span>
+                                </div>
+                                Minimum amount is ₱100. Supports GCash, Maya, Debit/Credit Cards, and QRPH.
+                            </div>
+                            <button type="submit" id="donate-btn" class="btn btn-danger w-100 py-3 fw-bold shadow-sm">
+                                <i class="bi bi-shield-check me-2"></i>Donate via PayMongo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ABOUT TAB -->
+        <div id="tab-about" class="tab-content" style="display:none;">
+            <div class="card shadow-sm p-4 border">
+                <h2 class="fw-bold text-primary mb-1">About AhonNa</h2>
+                <p class="text-muted mb-3">Developed for Tagbilaran City, Bohol</p>
+                <p class="text-secondary">AhonNa is a web-based evacuation and routing system designed to guide residents to the nearest safe evacuation centers during natural disasters or emergencies. It tracks real-time center capacities, addresses, and status to prevent overcrowding and save lives.</p>
+            </div>
+        </div>
+
+        <!-- LOGIN TAB -->
+        <div id="tab-login" class="tab-content" style="display:none;">
+            <div class="row justify-content-center">
+                <div class="col-md-5">
+                    <div class="card shadow-sm p-4 border">
+                        <h3 class="fw-bold text-primary mb-3"><i class="bi bi-box-arrow-in-right me-2"></i>User Login</h3>
+                        <div id="login-alert"></div>
+                        <form onsubmit="handleLogin(event)">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Email address</label>
+                                <input type="email" id="login-email" class="form-control" required placeholder="name@example.com">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Password</label>
+                                <input type="password" id="login-password" class="form-control" required placeholder="••••••••">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Login</button>
+                        </form>
+                        <p class="text-center text-muted mt-3 small">Don't have an account? <a href="#" onclick="switchTab('register')">Register here</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REGISTER TAB -->
+        <div id="tab-register" class="tab-content" style="display:none;">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card shadow-sm p-4 border">
+                        <h3 class="fw-bold text-primary mb-3"><i class="bi bi-person-plus me-2"></i>Create an Account</h3>
+                        <div id="register-alert"></div>
+                        <form onsubmit="handleRegister(event)">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Full Name</label>
+                                <input type="text" id="reg-fullname" class="form-control" required placeholder="Juan Dela Cruz">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Email Address</label>
+                                <input type="email" id="reg-email" class="form-control" required placeholder="name@example.com">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Contact Number</label>
+                                <input type="text" id="reg-contact" class="form-control" required placeholder="09123456789">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Password</label>
+                                <input type="password" id="reg-password" class="form-control" required placeholder="••••••••">
+                            </div>
+                            <button type="submit" class="btn btn-success w-100 py-2 fw-bold">Register Account</button>
+                        </form>
+                        <p class="text-center text-muted mt-3 small">Already have an account? <a href="#" onclick="switchTab('login')">Login here</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let allCenters = [];
+        let map = null;
+        let markers = {};
+        let currentUser = null;
+
+        // Check authentication state on page load
+        window.onload = async () => {
+            await checkAuth();
+            
+            // Handle URL query parameters for modern inline payment feedback
+            const urlParams = new URLSearchParams(window.location.search);
+            const alertContainer = document.getElementById('donation-alert-container');
+
+            if (urlParams.get('payment') === 'success') {
+                switchTab('donate');
+                if (alertContainer) {
+                    alertContainer.innerHTML = `
+                        <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                                <div>
+                                    <strong>Donation Successful!</strong> Thank you for supporting the AhonNa Emergency Relief Fund.
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    `;
+                }
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (urlParams.get('payment') === 'cancelled') {
+                switchTab('donate');
+                if (alertContainer) {
+                    alertContainer.innerHTML = `
+                        <div class="alert alert-warning alert-dismissible fade show shadow-sm mb-4" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+                                <div>
+                                    <strong>Checkout Cancelled.</strong> Your donation process was cancelled. You can try again anytime.
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    `;
+                }
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        };
+
+        async function checkAuth() {
+            try {
+                const res = await fetch('/api/current-user');
+                const data = await res.json();
+                const authNav = document.getElementById('auth-nav-items');
+                const heroAuth = document.getElementById('hero-auth-btns');
+
+                if (data.loggedIn) {
+                    currentUser = data.user;
+                    authNav.innerHTML = `
+                        <span class="text-light me-3 small"><i class="bi bi-person-circle text-info me-1"></i> ${currentUser.fullname}</span>
+                        <button class="btn btn-outline-light btn-sm" onclick="handleLogout()">Logout</button>
+                    `;
+                    heroAuth.innerHTML = `
+                        <p class="text-light mb-2">Welcome back, <strong>${currentUser.fullname}</strong>!</p>
+                        <button class="btn btn-light text-primary fw-bold px-4 py-2 me-2" onclick="switchTab('centers')">View Evacuation Centers <i class="bi bi-arrow-right ms-1"></i></button>
+                        <button class="btn btn-outline-light fw-bold px-4 py-2" onclick="switchTab('donate')"><i class="bi bi-heart-fill text-danger me-1"></i> Donate Fund</button>
+                    `;
+                } else {
+                    currentUser = null;
+                    authNav.innerHTML = `
+                        <button class="btn btn-outline-light btn-sm me-2" onclick="switchTab('login')">Login</button>
+                        <button class="btn btn-info btn-sm text-white" onclick="switchTab('register')">Register</button>
+                    `;
+                    heroAuth.innerHTML = `
+                        <button class="btn btn-light text-primary fw-bold px-4 py-2 me-2" onclick="switchTab('centers')">Explore Centers <i class="bi bi-arrow-right ms-1"></i></button>
+                        <button class="btn btn-outline-light fw-bold px-4 py-2" onclick="switchTab('donate')"><i class="bi bi-heart-fill text-danger me-1"></i> Donate Fund</button>
+                    `;
+                }
+            } catch (err) {
+                console.error("Auth check failed", err);
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            
+            const target = document.getElementById(`tab-${tabName}`);
+            if (target) target.style.display = 'block';
+
+            if (tabName === 'centers') {
+                setTimeout(() => {
+                    if (!map) {
+                        initMap();
+                    } else {
+                        map.invalidateSize();
+                    }
+                }, 100);
+                loadCenters();
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const fullname = document.getElementById('reg-fullname').value;
+            const email = document.getElementById('reg-email').value;
+            const contact_number = document.getElementById('reg-contact').value;
+            const password = document.getElementById('reg-password').value;
+            const alertBox = document.getElementById('register-alert');
+
+            try {
+                const res = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fullname, email, password, contact_number })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    alertBox.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    setTimeout(() => switchTab('login'), 1500);
+                } else {
+                    alertBox.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            } catch (err) {
+                alertBox.innerHTML = `<div class="alert alert-danger">An error occurred. Please try again.</div>`;
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const alertBox = document.getElementById('login-alert');
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    alertBox.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    await checkAuth();
+                    setTimeout(() => switchTab('centers'), 1000);
+                } else {
+                    alertBox.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                }
+            } catch (err) {
+                alertBox.innerHTML = `<div class="alert alert-danger">An error occurred. Please try again.</div>`;
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                await fetch('/api/logout', { method: 'POST' });
+                await checkAuth();
+                switchTab('home');
+            } catch (err) {
+                console.error("Logout failed", err);
+            }
+        }
+
+        async function handleDonate(e) {
+            e.preventDefault();
+            const amount = document.getElementById('donation-amount').value;
+            const btn = document.getElementById('donate-btn');
+            const alertContainer = document.getElementById('donation-alert-container');
+
+            if (!amount || amount < 100) {
+                alertContainer.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-3" role="alert">
+                        Minimum donation amount via PayMongo is <strong>₱100</strong>.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Redirecting to PayMongo...`;
+
+            try {
+                const res = await fetch('/api/create-checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: parseInt(amount),
+                        description: 'AhonNa Emergency Relief Fund Donation'
+                    })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.success && data.checkout_url) {
+                    window.location.href = data.checkout_url;
+                } else {
+                    alertContainer.innerHTML = `
+                        <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-3" role="alert">
+                            ${data.error || 'Failed to initialize payment session.'}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    `;
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-shield-check me-2"></i>Donate via PayMongo`;
+                }
+            } catch (err) {
+                console.error("Donation connection error:", err);
+                alertContainer.innerHTML = `
+                    <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-3" role="alert">
+                        An error occurred while connecting to payment gateway.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-shield-check me-2"></i>Donate via PayMongo`;
+            }
+        }
+
+        function initMap() {
+            map = L.map('map').setView([9.6515, 123.8565], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            if (allCenters.length > 0) {
+                updateMapMarkers(allCenters);
+            }
+        }
+
+        async function loadCenters() {
+            if (allCenters.length === 0) {
+                try {
+                    const res = await fetch('/api/evacuation-centers');
+                    allCenters = await res.json();
+                } catch (err) {
+                    console.error("Failed to load centers:", err);
+                }
+            }
+            displayCenters(allCenters);
+            updateMapMarkers(allCenters);
+        }
+
+        function displayCenters(centers) {
+            const container = document.getElementById('centers-list');
+            if (centers.length === 0) {
+                container.innerHTML = `<div class="col-12 text-center text-muted py-5"><p>No evacuation centers found.</p></div>`;
+                return;
+            }
+            container.innerHTML = centers.map(c => `
+                <div class="col-md-6">
+                    <div class="card h-100 shadow-sm" style="cursor: pointer;" onclick="focusCenter(${c.id}, ${c.latitude}, ${c.longitude})">
+                        <div class="card-body p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h5 class="card-title fw-bold text-primary mb-0">${c.name}</h5>
+                                <span class="badge bg-success text-uppercase px-2 py-1">${c.status}</span>
+                            </div>
+                            <p class="card-text text-secondary mb-2 small"><i class="bi bi-geo-alt-fill text-danger me-1"></i> ${c.location}</p>
+                            <p class="card-text text-secondary mb-0 small"><i class="bi bi-people-fill text-dark me-1"></i> <strong>Capacity:</strong> ${c.current_occupancy} / ${c.capacity}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function focusCenter(id, lat, lng) {
+            if (!map) return;
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth' });
+            map.setView([lat, lng], 17);
+            
+            if (markers[id]) {
+                markers[id].openPopup();
+            }
+        }
+
+        function updateMapMarkers(centers) {
+            if (!map) return;
+
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            markers = {};
+
+            centers.forEach(c => {
+                if (c.latitude && c.longitude) {
+                    const marker = L.marker([c.latitude, c.longitude]).addTo(map)
+                        .bindPopup(`<b>${c.name}</b><br>${c.location}<br>Capacity: ${c.current_occupancy}/${c.capacity}`);
+                    markers[c.id] = marker;
+                }
+            });
+        }
+
+        function filterCenters() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allCenters.filter(c => 
+                c.name.toLowerCase().includes(query) || 
+                c.location.toLowerCase().includes(query)
+            );
+            displayCenters(filtered);
+            updateMapMarkers(filtered);
+        }
+    </script>
+</body>
+</html>
